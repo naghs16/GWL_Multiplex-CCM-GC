@@ -1,0 +1,130 @@
+---
+title: "Generate_Data_Modeling"
+author: "Leyla.Naghipour"
+date: "19/5/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+rm(list=ls(all=TRUE))
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r parameters}
+mainDir <- "D:/PostDoc/GWL/Data/missing/"
+subDir <- "D:/PostDoc/GWL/Data/MON/"
+dir.create(subDir, showWarnings = F)
+# subDir2 <- "D:/Thesis_Ph.D/GWL_Tabriz/Data/Selection/I/MUX/"
+# dir.create(subDir2, showWarnings = F)
+data.files <- list.files(path = mainDir)
+
+num.data <- 1:length(data.files)
+num.data.ind <- num.data[-c(3:9,40)]
+num.mon <- 12
+num.year <- 16 #From 1380-1395
+num.surr <- 50
+M <- num.mon*num.year
+ts.mat <- matrix(0,nrow = M, ncol = length(num.data.ind))
+```
+
+```{r}
+cnt <- 0
+for (I in num.data.ind) {
+  cnt <- cnt + 1
+  name.file <- paste0(mainDir, data.files[I])
+  ts <- read.csv(name.file)
+  tit <- paste("groundwater level:", sub(".csv", "", data.files[I]) )
+  plot (1:M,
+        ts[, 4],
+        main = tit,
+        xlab = "Month",
+        ylab = "GWL")
+  lines(1:M, ts[, 4], col = "gray ", lwd = 1.5)
+  mean.mon <- vector()
+  
+  for (mon in 1:num.mon) {
+    m.sum <- 0
+    for (y in 1:num.year) {
+      m.sum <- m.sum + ts[mon + (y - 1) * 12, 4]
+    }
+    mean.mon[mon] <- m.sum / num.year
+  }
+  
+  sig.mon <- vector()
+  
+  for (mon in 1:num.mon) {
+    s.sum <- 0
+    for (y in 1:num.year) {
+      s.sum <- s.sum + (ts[mon + (y - 1) * 12, 4] - mean.mon[mon]) ^ 2
+    }
+    sig.mon[mon] <- sqrt(s.sum / (num.year-1))
+  }
+  
+  ts.anom.unit <- vector()
+  
+  for (y in 1:num.year) {
+    for (mon in 1:num.mon) {
+      
+        ts.anom.unit[mon + (y - 1) * 12] <- (ts[mon + (y - 1) * 12, 4] - mean.mon[mon]) / sig.mon[mon]
+      
+    }
+  }
+  ts.mat[, cnt] <- ts.anom.unit
+  tit <- paste("groundwater level (normalized):", I)
+  plot (1:M,
+        ts.anom.unit,
+        main = tit,
+        xlab = "Month",
+        ylab = "GWL")
+  lines(1:M, ts.anom.unit, col = "gray ", lwd = 1.5)
+}
+
+name.data <- paste0(subDir, "GWL-Tabriz_sur0_Layer-FOR.RDS")
+saveRDS(ts.mat, name.data)
+```
+
+```{r echo=F}
+generate_surrogate <- function(TS.MAT){
+  #TS.MAT is a matrix, e.g. TS.MAT[,3] is the time series corresponding to node 3
+  N <- dim(TS.MAT)[2]
+  M <- dim(TS.MAT)[1]
+  TS.MAT.SURR <- matrix(0, nrow=M, ncol=N)
+  
+  lapply(1:N, function(i)
+    TS.MAT.SURR[,i] <<- sample(TS.MAT[,i])
+  )
+  
+  #return a matrix in the same format as input, but with surrogates
+  return(TS.MAT.SURR)
+}
+Build_Surrogate <- compiler::cmpfun(generate_surrogate)
+
+ts.mat.surr <-matrix(0, nrow = M, ncol = num.data.ind)
+
+for (sur in 1:num.surr) {
+  name.data.surr <- paste0(subDir, "GWL-Tabriz_sur", sur, "_Layer-FOR.RDS")
+  ts.mat.surr <- Build_Surrogate(ts.mat)
+  saveRDS(ts.mat.surr, name.data.surr)
+}
+```
+
+```{r echo=F}
+ts.mat.inv <- matrix(0, nrow = M, ncol = length(num.data.ind))
+for (i in 1:length(num.data.ind)) {
+  ts.mat.inv[, i] <- ts.mat[seq(M, 1), i] #Inverted time series
+}
+name.data <- paste0(subDir, "GWL-Tabriz_sur0_Layer-INV.RDS")
+saveRDS(ts.mat.inv, name.data)
+
+for (sur in 1:num.surr) {
+  ts.inv <- matrix(0, nrow = M, ncol = length(num.data.ind))
+  name.data.surr <- paste0(subDir, "GWL-Tabriz_sur", sur, "_Layer-FOR.RDS")
+  ts <- readRDS(name.data.surr)
+  for (i in 1:length(num.data.ind)) {
+    ts.inv[, i] <- ts[seq(M, 1), i] #Inverted time series
+  }
+  name.data.surr <- paste0(subDir, "GWL-Tabriz_sur", sur, "_Layer-INV.RDS")
+  saveRDS(ts.inv, name.data.surr)
+}
+```
+

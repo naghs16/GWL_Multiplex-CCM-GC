@@ -1,0 +1,273 @@
+---
+title: "GWL_Preprocessing"
+author: "Leyla.Naghipour"
+date: "11/6/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+rm(list=ls(all=TRUE))
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(Kendall)#The Mann–Kendall test for trend detection with seasonal patterns
+library(trend)
+library(tseries)
+library(TSA)
+```
+```{r parameters}
+sys.path <- "D:/PostDoc/GWL/"
+mainDir <- paste0(sys.path,"Data/missing/")
+subDir <- paste0(sys.path,"Data/MON/")
+dir.create(subDir, showWarnings = F)
+data.files <- list.files(path = mainDir)
+fig.dir <- paste0(sys.path, "Figures/")
+
+num.data <- 1:length(data.files)
+num.data.ind <- num.data[-c(3:9,40)]
+num.mon <- 12
+num.year <- 16 #From 1380-1395
+num.surr <- 50
+M <- num.mon*num.year
+TS.res <- ts.mat <- matrix(0,nrow = M, ncol = length(num.data.ind))
+```
+
+```{r}
+cnt <- 0
+for (I in num.data.ind) {
+  cnt <- cnt + 1
+  name.file <- paste0(mainDir, data.files[I])
+  TS.1 <- read.csv(name.file)
+  TS <- ts(TS.1[,4],
+        frequency=12,
+        start=c(2001,3))
+
+  plot(decompose(TS))
+  plot(stl(TS, s.window="periodic"))
+}
+```
+#' Compute some measures to quantify the features, including stationary, trend by Mann-Kendall, sens slope
+```{r}
+cnt <- 0
+for (I in num.data.ind) {
+  cnt <- cnt + 1
+  name.file <- paste0(mainDir, data.files[I])
+  TS.1 <- read.csv(name.file)
+  TS <- ts(TS.1[,4],
+        frequency=12,
+        start=c(2001,3))
+
+  tseries::adf.test(TS) # p-value < 0.05 indicates the TS is stationary
+  tseries::pp.test(TS, type = "Z(t_alpha)") #Phillips-Perron test to detect stationary series
+
+  MK <- Kendall::MannKendall(TS)
+  summary(MK)
+  
+  SMK <- Kendall::SeasonalMannKendall(TS)
+  summary(SMK)
+  
+  trend::sens.slope(TS)
+  trend::sea.sens.slope(TS)
+}
+```
+```{r}
+b <- c <- list()
+cnt <- 0
+for (I in num.data.ind) {
+  cnt <- cnt + 1
+  name.file <- paste0(mainDir, data.files[I])
+  TS.1 <- read.csv(name.file)
+  TS <- ts(TS.1[,4],
+        frequency=12,
+        start=c(2001,3))
+# trModel <- lm(TS ~ c(1:length(TS)))#de-trended by a regression model
+# TS.res[,cnt] <- resid(trModel)
+  for (j in 2:M) {
+   TS.res[j,cnt] <- log(TS[j]) - log(TS[j-1]) #de-trended by differencing between t and t-1 and log transfarm
+  }
+  
+b[[cnt]] <- tseries::adf.test(TS.res[,cnt])
+c[[cnt]] <- tseries::pp.test(TS, type = "Z(t_alpha)")# p-value < 0.05 indicates the TS is stationary
+# tit <- paste("groundwater level:", sub(".csv", "", data.files[I]) )
+# plot(1:M, resid(trModel), main = tit,
+#         xlab = "Month",
+#         ylab = "GWL",
+#      type="l")  # resid(trModel) contains the de-trended series.
+}
+```
+#' Deseasonalization by the Fast Fourier Transform (fft)
+```{r}
+# per <- TSA::periodogram(w$Max_TemperatureF,lwd = 1)
+# x <- which(per$freq < 0.01) #0.01 should be changed based on the plot of per
+# plot(x = per$freq[x], y = per$spec[x], type="s")
+# 
+# dd = data.frame(freq=per$freq, spec=per$spec)
+# order = dd[order(-dd$spec),]
+# top2 = head(order, 2)
+# 
+# # display the 2 highest "power" frequencies
+# top2
+# 
+# time = 1/top2$f
+# time
+
+### define a function to calculate FFT
+#https://stackoverflow.com/questions/41435777/perform-fourier-analysis-to-a-time-series-in-r/41465250
+
+#x is the time-series, n is the number of harmonics-i.e., 18L, up is the upsampling ...
+nff = function(x = NULL, n = NULL, up = 10L, plot = TRUE, add = FALSE, main = NULL, ...){
+  #The direct transformation
+  #The first frequency is DC, the rest are duplicated
+  dff = fft(x)
+  #The time
+  t = seq(from = 1, to = length(x))
+  #Upsampled time
+  nt = seq(from = 1, to = length(x)+1-1/up, by = 1/up)
+  #New spectrum
+  ndff = array(data = 0, dim = c(length(nt), 1L))
+  ndff[1] = dff[1] #Always, it's the DC component
+  if(n != 0){
+    ndff[2:(n+1)] = dff[2:(n+1)] #The positive frequencies always come first
+    #The negative ones are trickier
+    ndff[length(ndff):(length(ndff) - n + 1)] = dff[length(x):(length(x) - n + 1)]
+  }
+  #The inverses
+  indff = fft(ndff/length(x), inverse = TRUE)
+  idff = fft(dff/length(x), inverse = TRUE)
+  if(plot){
+    if(!add){
+      plot(x = t, y = x, pch = 16L, xlab = "Time", ylab = "Measurement",
+        main = ifelse(is.null(main), paste(n, "harmonics"), main))
+      #lines(y = Mod(idff), x = t, col = adjustcolor(1L, alpha = 0.5))
+    }
+    lines(y = Mod(indff), x = nt, ...)
+  }
+  ret = data.frame(time = nt, y = Mod(indff))
+  return(ret)
+}
+
+cnt <- 0
+for (I in 1:length(num.data.ind)) {
+  cnt <- cnt + 1
+#   nam.fig <- paste0(fig.dir,"res_18-ID",cnt,".png")
+#   png(nam.fig)
+# res = nff(x = TS.res[,cnt], n = 18L, up = 100L, col = 2L)
+# dev.off()
+  ts.fft <- TS.res[, cnt]
+    # nff(x = TS.res[, cnt],
+    #     n = 18L,
+    #     up = 1L,
+    #     plot = F)$y - TS.res[, cnt]
+  tit <- paste("groundwater level:", sub("ts.fft-", "", I))
+  plot (1:M,
+        ts.fft,
+        main = tit,
+        xlab = "Month",
+        ylab = "GWL")
+  lines(1:M, ts.fft, col = "gray ", lwd = 1.5)
+  mean.mon <- vector()
+  
+  for (mon in 1:num.mon) {
+    m.sum <- 0
+    for (y in 1:num.year) {
+      m.sum <- m.sum + ts.fft[mon + (y - 1) * 12]
+    }
+    mean.mon[mon] <- m.sum / num.year
+  }
+  
+  sig.mon <- vector()
+  
+  for (mon in 1:num.mon) {
+    s.sum <- 0
+    for (y in 1:num.year) {
+      s.sum <- s.sum + (ts.fft[mon + (y - 1) * 12] - mean.mon[mon]) ^ 2
+    }
+    sig.mon[mon] <- sqrt(s.sum / (num.year-1))
+  }
+  
+  ts.anom.unit <- vector()
+  
+  for (y in 1:num.year) {
+    for (mon in 1:num.mon) {
+      
+        ts.anom.unit[mon + (y - 1) * 12] <- (ts.fft[mon + (y - 1) * 12] - mean.mon[mon]) / sig.mon[mon]
+      
+    }
+  }
+  ts.mat[, cnt] <- ts.anom.unit
+  tit <- paste("groundwater level (normalized):", I)
+  plot (1:M,
+        ts.anom.unit,
+        main = tit,
+        xlab = "Month",
+        ylab = "GWL")
+  lines(1:M, ts.anom.unit, col = "gray ", lwd = 1.5)
+}
+
+name.data <- paste0(subDir, "GWL-Tabriz-WFFT_sur0_Layer-FOR.RDS")
+saveRDS(ts.mat, name.data)
+
+#To save the results separately
+# sep = array(data = NA_real_, dim = c(7300L, 2 + 18), dimnames = list(NULL, c("t", paste0("H", 0:18))))
+# sep[,1:2] = as.matrix(nff(x = y, n = 0, up = 100L, plot = FALSE))
+# 
+# for(i in 1:18L){
+#   sep[,i+2] = nff(x = y, n = i, up = 100L, plot = FALSE)$y - nff(x = y, n = i-1, up = 100L, plot = FALSE)$y
+# }
+
+```
+```{r echo=F}
+generate_surrogate <- function(TS.MAT){
+  #TS.MAT is a matrix, e.g. TS.MAT[,3] is the time series corresponding to node 3
+  N <- dim(TS.MAT)[2]
+  M <- dim(TS.MAT)[1]
+  TS.MAT.SURR <- matrix(0, nrow=M, ncol=N)
+  
+  lapply(1:N, function(i)
+    TS.MAT.SURR[,i] <<- sample(TS.MAT[,i])
+  )
+  
+  #return a matrix in the same format as input, but with surrogates
+  return(TS.MAT.SURR)
+}
+Build_Surrogate <- compiler::cmpfun(generate_surrogate)
+
+ts.mat.surr <-matrix(0, nrow = M, ncol = num.data.ind)
+
+for (sur in 1:num.surr) {
+  name.data.surr <- paste0(subDir, "GWL-Tabriz-WFFT_sur", sur, "_Layer-FOR.RDS")
+  ts.mat.surr <- Build_Surrogate(ts.mat)
+  saveRDS(ts.mat.surr, name.data.surr)
+}
+```
+
+```{r echo=F}
+ts.mat.inv <- matrix(0, nrow = M, ncol = length(num.data.ind))
+for (i in 1:length(num.data.ind)) {
+  ts.mat.inv[, i] <- ts.mat[seq(M, 1), i] #Inverted time series
+}
+name.data <- paste0(subDir, "GWL-Tabriz-WFFT_sur0_Layer-INV.RDS")
+saveRDS(ts.mat.inv, name.data)
+
+for (sur in 1:num.surr) {
+  ts.inv <- matrix(0, nrow = M, ncol = length(num.data.ind))
+  name.data.surr <- paste0(subDir, "GWL-Tabriz-WFFT_sur", sur, "_Layer-FOR.RDS")
+  ts <- readRDS(name.data.surr)
+  for (i in 1:length(num.data.ind)) {
+    ts.inv[, i] <- ts[seq(M, 1), i] #Inverted time series
+  }
+  name.data.surr <- paste0(subDir, "GWL-Tabriz-WFFT_sur", sur, "_Layer-INV.RDS")
+  saveRDS(ts.inv, name.data.surr)
+}
+```
+```{r}
+# ts.read <- readRDS(paste0(subDir, "GWL-Tabriz-FFT_sur0_Layer-FOR.RDS"))
+# a <- list()
+# for (i in 1:32) {
+#   a[[i]] <- tseries::adf.test(ts.read[,i]) # p-value < 0.05 indicates the TS is stationary
+# }
+ 
+```
+
+
