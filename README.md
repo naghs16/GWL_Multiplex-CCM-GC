@@ -10,7 +10,7 @@ Naghipour L., Kamran K.V., Ghanbari A., Nourani V., Aalami M.T. and Zhang Y. (20
 For any questions/suggestions about the codes/approach, please contact naghipour [dot] l [at] tabrizu [dot] ac [dot] ir.
 
 # Computer Requirements
-Intel® Pentium® CPU G2030 @ 3.00GHz 3GHz with 2 GByte RAM and 128 GByte Hardware (the analysis is used around 5 GByte of the Hardware)
+Intel® Pentium® CPU G2030 @ 3.00GHz 3GHz with 2 GByte RAM and 128 GByte Hardware (the analysis used around 5 GByte of the Hardware)
 
 # Setup Instructions
 If you already have a R environment, you could ignore this part and continue with explanations of the next part. Otherwise, you should install R based on your operating system (i.e. Windows etc). Microsoft R Open is the enhanced distribution of R from Microsoft Corporation, and this distribution is highly recommended by the scientists.  
