@@ -1,7 +1,7 @@
 # GWL_Multiplex-CCM-GC
 The source codes are provided in this repository used to preprocess the data and reproduce the results from the statistical approach in Naghipour et al. (2023).
 
-The codes are performed in an R environment by several packages.
+The codes are performed in the R environment by several packages.
 
 If you use the codes, please cite our recent work in your publications:
 
@@ -13,7 +13,7 @@ For any questions/suggestions about the codes/approach, please contact naghipour
 Intel® Pentium® CPU G2030 @ 3.00GHz 3GHz with 2 GByte RAM and 128 GByte Hardware (the analysis used around 5 GByte of the Hardware)
 
 # Setup Instructions
-If you already have an R environment, you could ignore this part and continue with explanations of the next part. Otherwise, you should install R based on your operating system (i.e. Windows, etc). Microsoft R Open is the enhanced distribution of R from Microsoft Corporation, and this distribution is highly recommended by scientists.  
+If you already have the R environment, you could ignore this part and continue with explanations of the next part. Otherwise, you should install R based on your operating system (i.e. Windows, etc). Microsoft R Open is the enhanced distribution of R from Microsoft Corporation, and this distribution is highly recommended by scientists.  
 
 ## Prerequisites
 In the following, all instructions are performed in R 4.0.2 with Ubuntu desktop operating system (as well as Windows 10). 
